@@ -69,7 +69,7 @@ pub(crate) fn undiagonalize<V: LaneWords4>(mut x: State<V>) -> State<V> {
 
 impl ChaCha {
     #[inline(always)]
-    pub fn new(key: &[u8; 32], nonce: &[u8]) -> Self {
+    pub fn new(key: &[u8; 16], nonce: &[u8]) -> Self {
         init_chacha(key, nonce)
     }
 
@@ -100,7 +100,7 @@ impl ChaCha {
     }
 
     #[inline(always)]
-    pub fn get_seed(&self) -> [u8; 32] {
+    pub fn get_seed(&self) -> [u8; 16] {
         get_seed(self)
     }
 }
@@ -149,7 +149,7 @@ fn d0123<Mach: Machine>(m: Mach, d: vec128_storage) -> Mach::u32x4x4 {
 fn refill_wide_impl<Mach: Machine>(
     m: Mach, state: &mut ChaCha, drounds: u32, out: &mut [u32; BUFSZ],
 ) {
-    let k = m.vec([0x6170_7865, 0x3320_646e, 0x7962_2d32, 0x6b20_6574]);
+    let k = m.vec([0x61707865, 0x3120646E, 0x79622D36, 0x6B206574]);
     let b = m.unpack(state.b);
     let c = m.unpack(state.c);
     let mut x = State {
@@ -186,7 +186,7 @@ dispatch!(m, Mach, {
 // and XChaCha's setup step.
 dispatch!(m, Mach, {
     fn refill_narrow_rounds(state: &mut ChaCha, drounds: u32) -> State<vec128_storage> {
-        let k: Mach::u32x4 = m.vec([0x6170_7865, 0x3320_646e, 0x7962_2d32, 0x6b20_6574]);
+        let k: Mach::u32x4 = m.vec([0x61707865, 0x3120646E, 0x79622D36, 0x6B206574]);
         let mut x = State {
             a: k,
             b: m.unpack(state.b),
@@ -224,12 +224,10 @@ dispatch_light128!(m, Mach, {
 });
 
 dispatch_light128!(m, Mach, {
-    fn get_seed(state: &ChaCha) -> [u8; 32] {
+    fn get_seed(state: &ChaCha) -> [u8; 16] {
         let b: Mach::u32x4 = m.unpack(state.b);
-        let c: Mach::u32x4 = m.unpack(state.c);
-        let mut key = [0u8; 32];
-        b.write_le(&mut key[..16]);
-        c.write_le(&mut key[16..]);
+        let mut key = [0u8; 16];
+        b.write_le(&mut key);
         key
     }
 });
@@ -240,7 +238,7 @@ fn read_u32le(xs: &[u8]) -> u32 {
 }
 
 dispatch_light128!(m, Mach, {
-    fn init_chacha(key: &[u8; 32], nonce: &[u8]) -> ChaCha {
+    fn init_chacha(key: &[u8; 16], nonce: &[u8]) -> ChaCha {
         let ctr_nonce = [
             0,
             if nonce.len() == 12 {
@@ -251,24 +249,22 @@ dispatch_light128!(m, Mach, {
             read_u32le(&nonce[nonce.len() - 8..nonce.len() - 4]),
             read_u32le(&nonce[nonce.len() - 4..]),
         ];
-        let key0: Mach::u32x4 = m.read_le(&key[..16]);
-        let key1: Mach::u32x4 = m.read_le(&key[16..]);
+        let key0: Mach::u32x4 = m.read_le(key);
         ChaCha {
             b: key0.into(),
-            c: key1.into(),
+            c: key0.into(),
             d: ctr_nonce.into(),
         }
     }
 });
 
 dispatch_light128!(m, Mach, {
-    fn init_chacha_x(key: &[u8; 32], nonce: &[u8; 24], rounds: u32) -> ChaCha {
-        let key0: Mach::u32x4 = m.read_le(&key[..16]);
-        let key1: Mach::u32x4 = m.read_le(&key[16..]);
+    fn init_chacha_x(key: &[u8; 16], nonce: &[u8; 24], rounds: u32) -> ChaCha {
+        let key0: Mach::u32x4 = m.read_le(key);
         let nonce0: Mach::u32x4 = m.read_le(&nonce[..16]);
         let mut state = ChaCha {
             b: key0.into(),
-            c: key1.into(),
+            c: key0.into(),
             d: nonce0.into(),
         };
         let x = refill_narrow_rounds(&mut state, rounds);
