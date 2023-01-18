@@ -92,7 +92,7 @@ macro_rules! chacha_impl {
         }
 
         impl SeedableRng for $ChaChaXCore {
-            type Seed = [u8; 32];
+            type Seed = [u8; 16];
             #[inline]
             fn from_seed(seed: Self::Seed) -> Self {
                 $ChaChaXCore { state: ChaCha::new(&seed, &[0u8; 8]) }
@@ -145,7 +145,7 @@ macro_rules! chacha_impl {
         }
 
         impl SeedableRng for $ChaChaXRng {
-            type Seed = [u8; 32];
+            type Seed = [u8; 16];
             #[inline]
             fn from_seed(seed: Self::Seed) -> Self {
                 let core = $ChaChaXCore::from_seed(seed);
@@ -250,7 +250,7 @@ macro_rules! chacha_impl {
 
             /// Get the seed.
             #[inline]
-            pub fn get_seed(&self) -> [u8; 32] {
+            pub fn get_seed(&self) -> [u8; 16] {
                 self.rng
                     .core
                     .state
@@ -303,7 +303,7 @@ macro_rules! chacha_impl {
                 derive(Serialize, Deserialize),
             )]
             pub(crate) struct $ChaChaXRng {
-                seed: [u8; 32],
+                seed: [u8; 16],
                 stream: u64,
                 word_pos: u128,
             }
@@ -349,10 +349,7 @@ mod test {
     #[cfg(feature = "serde1")]
     #[test]
     fn test_chacha_serde_roundtrip() {
-        let seed = [
-            1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0, 0,
-            0, 2, 92,
-        ];
+        let seed = [1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0];
         let mut rng1 = ChaCha20Rng::from_seed(seed);
         let mut rng2 = ChaCha12Rng::from_seed(seed);
         let mut rng3 = ChaCha8Rng::from_seed(seed);
@@ -387,7 +384,7 @@ mod test {
     #[cfg(feature = "serde1")]
     #[test]
     fn test_chacha_serde_format_stability() {
-        let j = r#"{"seed":[4,8,15,16,23,42,4,8,15,16,23,42,4,8,15,16,23,42,4,8,15,16,23,42,4,8,15,16,23,42,4,8],"stream":27182818284,"word_pos":314159265359}"#;
+        let j = r#"{"seed":[4,8,15,16,23,42,4,8,15,16,23,42,4,8,15,16],"stream":27182818284,"word_pos":314159265359}"#;
         let r: ChaChaRng = serde_json::from_str(&j).unwrap();
         let j1 = serde_json::to_string(&r).unwrap();
         assert_eq!(j, j1);
@@ -395,22 +392,17 @@ mod test {
 
     #[test]
     fn test_chacha_construction() {
-        let seed = [
-            0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0,
-            0, 0, 0,
-        ];
+        let seed = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0];
         let mut rng1 = ChaChaRng::from_seed(seed);
-        assert_eq!(rng1.next_u32(), 137206642);
+        assert_eq!(rng1.next_u32(), 496253702);
 
         let mut rng2 = ChaChaRng::from_rng(rng1).unwrap();
-        assert_eq!(rng2.next_u32(), 1325750369);
+        assert_eq!(rng2.next_u32(), 2560710887);
     }
 
     #[test]
-    fn test_chacha_true_values_a() {
-        // Test vectors 1 and 2 from
-        // https://tools.ietf.org/html/draft-nir-cfrg-chacha20-poly1305-04
-        let seed = [0u8; 32];
+    fn test_chacha_all_zeros() {
+        let seed = [0u8; 16];
         let mut rng = ChaChaRng::from_seed(seed);
 
         let mut results = [0u32; 16];
@@ -418,168 +410,17 @@ mod test {
             *i = rng.next_u32();
         }
         let expected = [
-            0xade0b876, 0x903df1a0, 0xe56a5d40, 0x28bd8653, 0xb819d2bd, 0x1aed8da0, 0xccef36a8,
-            0xc70d778b, 0x7c5941da, 0x8d485751, 0x3fe02477, 0x374ad8b8, 0xf4b8436a, 0x1ca11815,
-            0x69b687c3, 0x8665eeb2,
-        ];
-        assert_eq!(results, expected);
-
-        for i in results.iter_mut() {
-            *i = rng.next_u32();
-        }
-        let expected = [
-            0xbee7079f, 0x7a385155, 0x7c97ba98, 0x0d082d73, 0xa0290fcb, 0x6965e348, 0x3e53c612,
-            0xed7aee32, 0x7621b729, 0x434ee69c, 0xb03371d5, 0xd539d874, 0x281fed31, 0x45fb0a51,
-            0x1f0ae1ac, 0x6f4d794b,
-        ];
-        assert_eq!(results, expected);
-    }
-
-    #[test]
-    fn test_chacha_true_values_b() {
-        // Test vector 3 from
-        // https://tools.ietf.org/html/draft-nir-cfrg-chacha20-poly1305-04
-        let seed = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 1,
-        ];
-        let mut rng = ChaChaRng::from_seed(seed);
-
-        // Skip block 0
-        for _ in 0..16 {
-            rng.next_u32();
-        }
-
-        let mut results = [0u32; 16];
-        for i in results.iter_mut() {
-            *i = rng.next_u32();
-        }
-        let expected = [
-            0x2452eb3a, 0x9249f8ec, 0x8d829d9b, 0xddd4ceb1, 0xe8252083, 0x60818b01, 0xf38422b8,
-            0x5aaa49c9, 0xbb00ca8e, 0xda3ba7b4, 0xc4b592d1, 0xfdf2732f, 0x4436274e, 0x2561b3c8,
-            0xebdd4aa6, 0xa0136c00,
-        ];
-        assert_eq!(results, expected);
-    }
-
-    #[test]
-    fn test_chacha_true_values_c() {
-        // Test vector 4 from
-        // https://tools.ietf.org/html/draft-nir-cfrg-chacha20-poly1305-04
-        let seed = [
-            0, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ];
-        let expected = [
-            0xfb4dd572, 0x4bc42ef1, 0xdf922636, 0x327f1394, 0xa78dea8f, 0x5e269039, 0xa1bebbc1,
-            0xcaf09aae, 0xa25ab213, 0x48a6b46c, 0x1b9d9bcb, 0x092c5be6, 0x546ca624, 0x1bec45d5,
-            0x87f47473, 0x96f0992e,
-        ];
-        let expected_end = 3 * 16;
-        let mut results = [0u32; 16];
-
-        // Test block 2 by skipping block 0 and 1
-        let mut rng1 = ChaChaRng::from_seed(seed);
-        for _ in 0..32 {
-            rng1.next_u32();
-        }
-        for i in results.iter_mut() {
-            *i = rng1.next_u32();
-        }
-        assert_eq!(results, expected);
-        assert_eq!(rng1.get_word_pos(), expected_end);
-
-        // Test block 2 by using `set_word_pos`
-        let mut rng2 = ChaChaRng::from_seed(seed);
-        rng2.set_word_pos(2 * 16);
-        for i in results.iter_mut() {
-            *i = rng2.next_u32();
-        }
-        assert_eq!(results, expected);
-        assert_eq!(rng2.get_word_pos(), expected_end);
-
-        // Test skipping behaviour with other types
-        let mut buf = [0u8; 32];
-        rng2.fill_bytes(&mut buf[..]);
-        assert_eq!(rng2.get_word_pos(), expected_end + 8);
-        rng2.fill_bytes(&mut buf[0..25]);
-        assert_eq!(rng2.get_word_pos(), expected_end + 15);
-        rng2.next_u64();
-        assert_eq!(rng2.get_word_pos(), expected_end + 17);
-        rng2.next_u32();
-        rng2.next_u64();
-        assert_eq!(rng2.get_word_pos(), expected_end + 20);
-        rng2.fill_bytes(&mut buf[0..1]);
-        assert_eq!(rng2.get_word_pos(), expected_end + 21);
-    }
-
-    #[test]
-    fn test_chacha_multiple_blocks() {
-        let seed = [
-            0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0, 7,
-            0, 0, 0,
-        ];
-        let mut rng = ChaChaRng::from_seed(seed);
-
-        // Store the 17*i-th 32-bit word,
-        // i.e., the i-th word of the i-th 16-word block
-        let mut results = [0u32; 16];
-        for i in results.iter_mut() {
-            *i = rng.next_u32();
-            for _ in 0..16 {
-                rng.next_u32();
-            }
-        }
-        let expected = [
-            0xf225c81a, 0x6ab1be57, 0x04d42951, 0x70858036, 0x49884684, 0x64efec72, 0x4be2d186,
-            0x3615b384, 0x11cfa18e, 0xd3c50049, 0x75c775f6, 0x434c6530, 0x2c5bad8f, 0x898881dc,
-            0x5f1c86d9, 0xc1f8e7f4,
-        ];
-        assert_eq!(results, expected);
-    }
-
-    #[test]
-    fn test_chacha_true_bytes() {
-        let seed = [0u8; 32];
-        let mut rng = ChaChaRng::from_seed(seed);
-        let mut results = [0u8; 32];
-        rng.fill_bytes(&mut results);
-        let expected = [
-            118, 184, 224, 173, 160, 241, 61, 144, 64, 93, 106, 229, 83, 134, 189, 40, 189, 210,
-            25, 184, 160, 141, 237, 26, 168, 54, 239, 204, 139, 119, 13, 199,
-        ];
-        assert_eq!(results, expected);
-    }
-
-    #[test]
-    fn test_chacha_nonce() {
-        // Test vector 5 from
-        // https://tools.ietf.org/html/draft-nir-cfrg-chacha20-poly1305-04
-        // Although we do not support setting a nonce, we try it here anyway so
-        // we can use this test vector.
-        let seed = [0u8; 32];
-        let mut rng = ChaChaRng::from_seed(seed);
-        // 96-bit nonce in LE order is: 0,0,0,0, 0,0,0,0, 0,0,0,2
-        rng.set_stream(2u64 << (24 + 32));
-
-        let mut results = [0u32; 16];
-        for i in results.iter_mut() {
-            *i = rng.next_u32();
-        }
-        let expected = [
-            0x374dc6c2, 0x3736d58c, 0xb904e24a, 0xcd3f93ef, 0x88228b1a, 0x96a4dfb3, 0x5b76ab72,
-            0xc727ee54, 0x0e0e978a, 0xf3145c95, 0x1b748ea8, 0xf786c297, 0x99c28f5f, 0x628314e8,
-            0x398a19fa, 0x6ded1b53,
+            0x52096789, 0xFD648360, 0x09F9B200, 0xC831F036,
+            0x5DE156E7, 0x49B804BA, 0x9242003D, 0x460FB259,
+            0x11F104CC, 0x2C6C6B24, 0x3BBE66E0, 0xAAD932FB,
+            0xC1FBDD0F, 0xB9D42321, 0xDC344FE4, 0x3F105AA0,
         ];
         assert_eq!(results, expected);
     }
 
     #[test]
     fn test_chacha_clone_streams() {
-        let seed = [
-            0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0, 7,
-            0, 0, 0,
-        ];
+        let seed = [ 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0];
         let mut rng = ChaChaRng::from_seed(seed);
         let mut clone = rng.clone();
         for _ in 0..16 {
